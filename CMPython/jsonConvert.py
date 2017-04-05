@@ -1,8 +1,8 @@
 # This script converts called ACIS json into GeoJSON for mapping
 
-import pandas as pd
 import requests
-import numpy as np
+from geojson import Feature, Point, FeatureCollection, Polygon
+import geojson
 
 params = '{"state":"la","grid":"21","meta":"ll","elems":' \
          '[{"name":"mint","interval":"mly","duration":"mly","reduce":"mean"}],' \
@@ -24,48 +24,42 @@ lat = [val for sublist in lat for val in sublist]  # List of lists converted to 
 lon = [val for sublist in lon for val in sublist]  # " "
 data = [val for sublist in data for val in sublist]  # " "
 
-df = pd.DataFrame({
-    'lat': lat,
-    'lon': lon,
-    'month': month,
-    'dataPoints': data})
-
-df.replace(-999, np.nan, inplace=True)
-
-df = df.dropna()
-
-lat = df.lat.tolist()
-lon = df.lon.tolist()
-data = df.dataPoints.tolist()
-
-geoJSON = '{ "type": "FeatureCollection", "features": ['
-
 # Create geoJSON string of points
 
+featureLISTpoint = []
 i = 0
-for dataPoint in df.dataPoints.tolist():
-    print(df.lon.tolist()[i])
-    geoJSON = geoJSON + '{ "type": "Feature", "geometry": {"type": "Point", "coordinates": [{}, {}]}, "properties": {"prop0": "{}"}}, '\
-        .format(lon[i], lat[i], data[i])
-    i = i + 1
+for dataPoint in data:
+    if dataPoint != -999:
+        point = Point((lon[i], lat[i]))
+        feature = Feature(geometry=point, properties={"value": "{}".format(data[i])})
+        featureLISTpoint.append(feature)
+        i = i + 1
+    else:
+        i = i + 1
 
-geoJSON = geoJSON[:-2] + ']}'
+outputJSONpoint = FeatureCollection(featureLISTpoint)
 
-print(geoJSON)
+with open('GeoJSONpoint.json', 'w') as f:
+    geojson.dump(outputJSONpoint, f)
 
+# Create geoJSON file of Polygons for grid
 
+gridSize = abs(lat[0]-lat[1])
+d = gridSize / 2  # ACIS points are center of grid panel, therefore we must create 4 points for the corners
+                # of the square with lat/lon + or - 'd' away from lat/lon of center
 
+featureLISTpoly = []
+j = 0
+for dataPoint in data:
+    if dataPoint != -999:
+        polygon = Polygon(((lon[j]-d, lat[j]+d), (lon[j]+d, lat[j]+d), (lon[j]+d, lat[j]-d), (lon[j]-d, lat[j]-d)))
+        feature = Feature(geometry=polygon, properties={"value": "{}".format(data[j])})
+        featureLISTpoly.append(feature)
+        j = j + 1
+    else:
+        j = j + 1
 
-# { "type": "Polygon",
-#     "coordinates": [
-#         [[30, 10], [40, 40], [20, 40], [10, 20], [30, 10]]
-#     ]
-# }
+outputJSONpoly = FeatureCollection(featureLISTpoly)
 
-# Create square for grid
-
-# for dataPoint in df.data:
-#     if dataPoint.isnull():
-#         continue
-#     else:
-#         geoJSON = geoJSON + '{ "type": "Polygon", "coordinates": [[[30, 10], [40, 40], [20, 40], [10, 20], [30, 10]]]}'
+with open('GeoJSONpoly.json', 'w') as f:
+    geojson.dump(outputJSONpoly, f)
